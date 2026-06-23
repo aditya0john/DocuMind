@@ -1,0 +1,12 @@
+streamlit>=1.35.0
+langchain>=0.2.0
+langchain-core
+langchain-mistralai
+langchain-community>=0.2.17
+langchain-text-splitters
+chromadb>=0.5.3
+mistralai>=1.0.0
+pymupdf>=1.24.0
+python-dotenv>=1.0.0
+tiktoken>=0.7.0
+protobuf>=3.20.3

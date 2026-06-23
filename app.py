@@ -9,7 +9,11 @@ Run with:
 """
 
 import os
-os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
+
+# Hard assignment (not setdefault) so it always wins even if grpcio/protobuf
+# was already imported during Streamlit's own bootstrap before app.py runs.
+os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
+
 import tempfile
 import streamlit as st
 from dotenv import load_dotenv
@@ -18,6 +22,15 @@ from src.ingestion import ingest_documents
 from src.agent import create_agent, format_chat_history
 
 load_dotenv()
+
+# On Streamlit Cloud, secrets live in st.secrets instead of .env
+# Sync them to os.environ early — before any LangChain/Pinecone import fires
+for key in ["MISTRAL_API_KEY", "PINECONE_API_KEY", "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"]:
+    try:
+        if key in st.secrets and key not in os.environ:
+            os.environ[key] = st.secrets[key]
+    except Exception:
+        pass  # st.secrets not available locally — that's fine, .env covers it
 
 # ── Page config ────────────────────────────────────────────────────────
 st.set_page_config(
@@ -55,15 +68,21 @@ st.markdown("""
 # ── Sidebar ────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## 📄 DocuMind")
-    st.caption("Multi-document RAG agent powered by MistralAi + ChromaDB")
+    st.caption("Multi-document RAG agent powered by MistralAI + Pinecone")
     st.divider()
 
-    # API key check
-    api_key = os.getenv("MISTRAL_API_KEY", "")
-    if not api_key:
-        api_key = st.text_input("MISTRAL API KEY", type="password", placeholder="sk-...")
-        if api_key:
-            os.environ["MISTRAL_API_KEY"] = api_key
+    # API key checks
+    mistral_key = os.getenv("MISTRAL_API_KEY", "")
+    if not mistral_key:
+        mistral_key = st.text_input("MISTRAL API KEY", type="password", placeholder="your_mistral_key")
+        if mistral_key:
+            os.environ["MISTRAL_API_KEY"] = mistral_key
+
+    pinecone_key = os.getenv("PINECONE_API_KEY", "")
+    if not pinecone_key:
+        pinecone_key = st.text_input("PINECONE API KEY", type="password", placeholder="your_pinecone_key")
+        if pinecone_key:
+            os.environ["PINECONE_API_KEY"] = pinecone_key
 
     st.subheader("📁 Upload Documents")
     uploaded_files = st.file_uploader(
@@ -135,18 +154,16 @@ with st.sidebar:
     if st.button("🔄 Reset all", use_container_width=True):
         for key in ["messages", "docs_ingested", "ingested_files"]:
             st.session_state.pop(key, None)
-        # Remove ChromaDB
-        import shutil
-        if os.path.exists("./chroma_db"):
-            shutil.rmtree("./chroma_db")
+        # Note: vectors live in Pinecone cloud — clear them from the Pinecone
+        # dashboard if needed (app.pinecone.io → your index → clear vectors)
         st.rerun()
 
 
 # ── Main area ──────────────────────────────────────────────────────────
 st.title("Ask your documents anything")
 
-if not os.getenv("MISTRAL_API_KEY"):
-    st.warning("⚠️ Add your Mistral API key in the sidebar to get started.")
+if not os.getenv("MISTRAL_API_KEY") or not os.getenv("PINECONE_API_KEY"):
+    st.warning("⚠️ Add your Mistral and Pinecone API keys in the sidebar to get started.")
     st.stop()
 
 if not st.session_state.get("docs_ingested"):

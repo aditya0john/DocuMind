@@ -2,6 +2,7 @@ streamlit>=1.35.0
 langchain>=0.2.0
 langchain-core
 langchain-mistralai
+langchain-pinecone
 langchain-community>=0.2.17
 langchain-text-splitters
 chromadb>=0.5.3
